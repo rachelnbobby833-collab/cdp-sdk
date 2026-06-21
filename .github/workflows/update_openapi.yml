@@ -1,5 +1,5 @@
-name: Update OpenAPI
-
+name: https://sandbox.cdpcoinbase.com
+3BNBKU4JZVJMMXFUICIZ7JQAI 
 on:
   schedule:
     - cron: "0 * * * *"
