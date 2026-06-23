@@ -13,6 +13,7 @@
   "entryPointStrategy": "resolve",
   "out": "./docs",
   "plugin": [],
+  "customJs": "./vercel-analytics-bundle.js",
   "excludePrivate": true,
   "excludeInternal": true,
   "excludeProtected": false,

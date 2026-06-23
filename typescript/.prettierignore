@@ -7,3 +7,4 @@ dist/
 src/_types/
 src/_cjs/
 src/_esm/
+vercel-analytics-bundle.js

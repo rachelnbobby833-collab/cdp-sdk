@@ -4,11 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
+    "build:analytics": "esbuild vercel-analytics.js --bundle --format=iife --outfile=vercel-analytics-bundle.js --platform=browser",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "check:auth-crypto-imports": "pnpm -r run check:auth-crypto-imports",
     "clean": "pnpm -r run clean",
-    "docs": "typedoc --options ./typedoc.json",
+    "docs": "pnpm run build:analytics && typedoc --options ./typedoc.json",
     "docs:md": "pnpm run docs:index && pnpm run docs:auth && pnpm run docs:evm && pnpm run docs:solana && pnpm run docs:policies && pnpm run docs:client",
     "docs:index": "typedoc --options ./typedoc.index.json",
     "docs:auth": "typedoc --options ./typedoc.auth.json",
@@ -37,6 +38,7 @@
     "@vitest/coverage-v8": "1.6.1",
     "bs58": "6.0.0",
     "dotenv": "16.6.1",
+    "esbuild": "^0.28.1",
     "eslint": "8.57.1",
     "eslint-config-prettier": "9.1.2",
     "eslint-import-resolver-typescript": "4.4.4",
@@ -59,5 +61,8 @@
     "patchedDependencies": {
       "@orval/core@7.21.0": "patches/@orval__core@7.21.0.patch"
     }
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }

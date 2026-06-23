@@ -103,3 +103,4 @@ target/
 
 # Env files
 **/.env
+typescript/vercel-analytics-bundle.js
