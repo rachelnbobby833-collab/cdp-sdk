@@ -58,6 +58,20 @@ export type {
 
 export { parseEther, parseUnits } from "viem";
 
+export {
+  getPortfolioSnapshot,
+  watchPortfolioSnapshot,
+  type PortfolioSnapshot,
+} from "./portfolio.js";
+export { fetchPortfolioBalances, type ChainBalance, type TokenBalance } from "./balances.js";
+export { tokenWatchlist } from "./tokenWatchlist.js";
+export {
+  fetchExchangeBalancesSnapshot,
+  mergePortfolioSnapshot,
+  subscribeToExchangeBalances,
+  type ExchangeBalance,
+} from "./coinbaseExchangeFeed.js";
+
 export type {
   X402ResourceQuality,
   X402DiscoveryResource,
