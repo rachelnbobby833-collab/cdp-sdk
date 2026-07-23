@@ -1,242 +1,190 @@
-# One-Page Summary: `python/cdp/auth/utils/jwt.py`
+# Executive Brief: JWT Authentication Utility
 
-## Purpose
-This file generates JSON Web Tokens (JWTs) for the Python SDK’s authentication layer. It supports:
-- standard CDP API authentication
-- wallet authentication for protected endpoints
-
-## Core Components
-
-### Data Models
-- **`JwtOptions`**
-  - stores API key ID, private key, request method, host, path, and expiration
-  - validates request method and converts it to uppercase
-
-- **`WalletJwtOptions`**
-  - stores wallet auth key, request method, host, path, and request payload
-  - validates request method and converts it to uppercase
-
-### Main Functions
-- **`generate_jwt(options)`**
-  - creates JWTs for normal CDP API requests
-  - supports:
-    - EC keys with `ES256`
-    - Ed25519 keys with `EdDSA`
-  - includes claims for subject, issuer, audience, validity window, and request URI
-  - adds a nonce to the JWT header
-
-- **`generate_wallet_jwt(options)`**
-  - creates JWTs for wallet-authenticated endpoints
-  - signs with `ES256`
-  - includes request URI, issued-at time, not-before time, unique token ID, and optional request payload
-
-### Helper Functions
-- **`_parse_private_key(key_data)`**
-  - parses either:
-    - PEM EC private keys
-    - base64 Ed25519 keys
-
-- **`_generate_nonce()`**
-  - creates a 16-digit numeric nonce
-
-## Key Behaviors
-- tokens are **request-bound**, meaning they are valid only for a specific method and endpoint
-- standard API JWTs are **short-lived** by default with a 120-second expiration
-- wallet JWTs can also include request payload data in the token
-- errors are surfaced as `ValueError`
-
-## Overall Summary
-This module is the SDK’s JWT utility layer. It handles input validation, key parsing, claim construction, and token signing so that API and wallet requests can be securely authenticated.
+**Source File:** `python/cdp/auth/utils/jwt.py`  
+**Module Area:** Authentication / Token Generation  
+**Primary Role:** Generate signed JWTs for secure API and wallet-authenticated requests
 
 ---
 
-# Technical Report: `python/cdp/auth/utils/jwt.py`
+## Executive Summary
 
-## Table of Contents
-1. Introduction
-2. Purpose of the Module
-3. Data Models
-   1. `JwtOptions`
-   2. `WalletJwtOptions`
-4. JWT Generation Functions
-   1. `generate_jwt`
-   2. `generate_wallet_jwt`
-5. Internal Helper Functions
-   1. `_parse_private_key`
-   2. `_generate_nonce`
-6. Security and Design Characteristics
-7. Conclusion
+This module is the Python SDK’s central utility for creating JSON Web Tokens (JWTs) used in authentication. It supports two related security flows:
+
+- **Standard API authentication** for CDP service requests
+- **Wallet authentication** for endpoints that require wallet-specific authorization
+
+The file’s main value is that it standardizes token creation in one place. It validates inputs, parses supported private key formats, builds short-lived request-specific claims, and signs tokens using the correct cryptographic algorithm.
+
+In practical terms, this module helps ensure that requests are authenticated consistently, securely, and with limited token reuse risk.
 
 ---
 
-## 1. Introduction
+## Business Purpose
 
-The file `python/cdp/auth/utils/jwt.py` implements authentication helpers for the Python SDK. Its primary responsibility is generating signed JSON Web Tokens (JWTs) for secure communication with CDP-related API endpoints. The module supports both standard API authentication and wallet-specific authentication flows.
+This module exists to make authenticated SDK requests both **secure** and **predictable**.
 
----
+It does this by:
+- ensuring every token is tied to a specific request target
+- limiting the default lifetime of standard API tokens
+- supporting more than one signing key format for flexibility
+- encapsulating low-level cryptographic details behind a simple interface
 
-## 2. Purpose of the Module
-
-The module centralizes JWT creation logic so that authentication is handled consistently across the SDK. It performs four major tasks:
-
-1. validates request and key inputs
-2. parses private keys in supported formats
-3. constructs claims that bind a token to a specific request
-4. signs the token using the appropriate cryptographic algorithm
-
-This separation improves maintainability and ensures authentication logic remains reusable and consistent.
+This design reduces repeated authentication logic across the SDK and improves maintainability.
 
 ---
 
-## 3. Data Models
+## What the Module Does
 
-### 3.1 `JwtOptions`
+### 1. Validates input options
+The module defines structured option models for both standard and wallet authentication flows. These models confirm that required request details are present and normalize HTTP methods before token generation begins.
 
-`JwtOptions` defines the fields required to generate a standard API JWT.
+### 2. Parses private keys
+It supports multiple private key formats for standard API JWT creation:
+- PEM-encoded EC private keys
+- base64-encoded Ed25519 private keys
 
-**Fields**
-- `api_key_id`
-- `api_key_secret`
-- `request_method`
-- `request_host`
-- `request_path`
-- `expires_in`
+Wallet JWT generation uses a narrower format:
+- base64-encoded DER EC private keys
 
-The model ensures that the HTTP method is valid and converts it to uppercase before use.
+### 3. Builds request-scoped claims
+Both token types are bound to a specific API request using a URI-style claim based on:
 
-**Role**
-This object packages the data needed for request-bound API authentication.
+`HTTP_METHOD host/path`
 
----
+This makes each token more tightly scoped and reduces the likelihood of inappropriate reuse across unrelated requests.
 
-### 3.2 `WalletJwtOptions`
+### 4. Signs JWTs with the correct algorithm
+The module automatically selects the signing algorithm for standard JWTs based on the parsed key type:
+- EC key → `ES256`
+- Ed25519 key → `EdDSA`
 
-`WalletJwtOptions` defines the inputs required to generate a wallet-auth JWT.
-
-**Fields**
-- `wallet_auth_key`
-- `request_method`
-- `request_host`
-- `request_path`
-- `request_data`
-
-Like `JwtOptions`, it validates and normalizes the HTTP method.
-
-**Role**
-This object packages the request information and payload data required for wallet-based authentication.
+Wallet JWTs are always signed with:
+- `ES256`
 
 ---
 
-## 4. JWT Generation Functions
+## Main Components
 
-### 4.1 `generate_jwt`
+## `JwtOptions`
+Used for standard API JWT creation.
 
-This function generates JWTs for standard CDP API authentication.
+**Captures:**
+- API key ID
+- API key secret
+- request method
+- request host
+- request path
+- optional expiration time
 
-**Processing steps**
-1. verifies required fields are present
-2. parses the private key using `_parse_private_key`
-3. determines the signing algorithm:
-   - EC private key → `ES256`
-   - Ed25519 private key → `EdDSA`
-4. builds a JWT header containing:
-   - algorithm
-   - key ID
-   - type
-   - nonce
-5. builds claims containing:
-   - subject
-   - issuer
-   - audience
-   - not-before timestamp
-   - expiration timestamp
-   - request URI binding
-6. signs and returns the encoded token
-
-**Notable feature**
-The token is bound to a request URI using the format:
-
-`METHOD host/path`
-
-This reduces token reuse across unrelated requests.
+**Key point:**
+This model ensures request information is normalized before signing begins.
 
 ---
 
-### 4.2 `generate_wallet_jwt`
+## `WalletJwtOptions`
+Used for wallet-auth JWT creation.
 
-This function generates JWTs for wallet-authenticated requests.
+**Captures:**
+- wallet authentication key
+- request method
+- request host
+- request path
+- request payload data
 
-**Processing steps**
-1. checks that the wallet authentication key exists
-2. constructs the request URI
-3. creates claims containing:
-   - `uris`
-   - `iat`
-   - `nbf`
-   - `jti`
-   - optional `req`
-4. decodes the wallet key from base64
-5. loads the decoded bytes as a DER EC private key
-6. signs the token with `ES256`
-
-**Notable feature**
-The optional `req` claim allows the token to be bound not only to the endpoint but also to request payload contents.
+**Key point:**
+This model allows wallet-auth tokens to optionally bind request payload contents in addition to the endpoint itself.
 
 ---
 
-## 5. Internal Helper Functions
+## `generate_jwt(options)`
+Generates a standard API authentication token.
 
-### 5.1 `_parse_private_key`
+**High-level flow:**
+1. validate required input fields
+2. parse the provided signing key
+3. determine the correct signing algorithm
+4. create JWT headers including a nonce
+5. create claims including validity timing and request binding
+6. sign and return the token
 
-This helper interprets the private key material supplied to the standard JWT generator.
-
-**Supported formats**
-- PEM EC private key
-- base64 Ed25519 private key
-
-**Behavior**
-- first attempts PEM parsing
-- if unsuccessful, attempts base64 decoding
-- for Ed25519 input, expects 64 bytes and uses the first 32 bytes as the seed
-- raises a `ValueError` if parsing fails
-
-This design allows a single API JWT generator to support multiple signing key types.
+**Executive takeaway:**
+This is the primary utility for secure, short-lived, request-specific API authentication.
 
 ---
 
-### 5.2 `_generate_nonce`
+## `generate_wallet_jwt(options)`
+Generates a wallet-authentication token.
 
-This helper creates a random 16-digit numeric string.
+**High-level flow:**
+1. validate wallet key presence
+2. build the request identifier
+3. create claims for time, uniqueness, request URI, and optional request payload
+4. decode and load the wallet private key
+5. sign the token using `ES256`
 
-**Purpose**
-The nonce is placed in the JWT header to add uniqueness to the token.
+**Executive takeaway:**
+This function provides a more specialized authentication mechanism for wallet-protected operations.
 
 ---
 
-## 6. Security and Design Characteristics
+## `_parse_private_key(key_data)`
+Internal helper for interpreting API signing keys.
 
-This module has several notable design properties:
+**Purpose:**
+Abstracts away the complexity of accepting different key formats.
 
-- **Request binding**  
+**Why it matters:**
+It allows the public JWT generation path to remain simple while still supporting multiple cryptographic key types.
+
+---
+
+## `_generate_nonce()`
+Internal helper that generates a 16-digit numeric nonce.
+
+**Purpose:**
+Adds uniqueness to the JWT header.
+
+---
+
+## Security Characteristics
+
+This module includes several security-oriented design choices:
+
+- **Request-bound tokens**  
   Tokens are scoped to a specific HTTP method and endpoint.
 
 - **Short-lived standard tokens**  
-  Standard JWTs expire after 120 seconds by default.
+  Standard JWTs default to a 120-second expiration window.
 
-- **Multiple key support for API tokens**  
-  Supports both EC and Ed25519 signing keys.
+- **Algorithm selection by key type**  
+  Standard API JWT creation supports both EC and Ed25519 keys.
 
-- **Wallet-specific signing flow**  
-  Wallet JWT generation expects a base64-encoded DER EC private key and always uses `ES256`.
+- **Payload binding for wallet auth**  
+  Wallet JWTs can include request data in the claims set.
 
-- **Structured validation**  
-  Pydantic models validate method inputs before token generation begins.
-
-- **Consistent error handling**  
-  Most failures are re-expressed as `ValueError`, simplifying caller behavior.
+- **Centralized validation and error handling**  
+  Input validation and failures are handled consistently, simplifying callers.
 
 ---
 
-## 7. Conclusion
+## Operational Notes
 
-`python/cdp/auth/utils/jwt.py` is a focused authentication utility module that creates signed, request-scoped JWTs for the SDK. It supports two related but distinct flows: standard API authentication and wallet authentication. By combining input validation, key parsing, claim generation, and signing in one module, it provides a clean and reusable foundation for secure authenticated requests.
+From an engineering and platform perspective, this file is important because it:
+- centralizes authentication behavior
+- reduces duplicated signing logic across the SDK
+- provides a clear boundary between application code and cryptographic implementation
+- enables consistent token construction for downstream API calls
+
+---
+
+## Bottom Line
+
+`python/cdp/auth/utils/jwt.py` is a focused authentication utility that turns request details and private keys into signed JWTs for secure API access.
+
+Its main strengths are:
+- clear separation of authentication concerns
+- support for multiple signing key formats
+- request-specific token scoping
+- simple, reusable interfaces for the rest of the SDK
+
+For executive audiences, the key point is simple: **this module is the SDK component responsible for securely packaging trust into each authenticated request.**
